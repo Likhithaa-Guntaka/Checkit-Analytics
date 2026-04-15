@@ -1,0 +1,10 @@
+requests
+beautifulsoup4
+sentence-transformers
+chromadb
+groq
+streamlit
+python-dotenv
+lxml
+tqdm
+sec-edgar-downloader
