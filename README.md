@@ -8,13 +8,11 @@
 
 Checkit Analytics is a Retrieval-Augmented Generation (RAG) system that lets analysts query earnings call transcripts and press releases as if they had an expert research assistant who has read every filing. The system downloads official documents directly from SEC EDGAR and Motley Fool, splits them into speaker-aware chunks, embeds them into a local vector database, and routes analyst questions through a Groq-hosted LLM that is forced to cite its sources.
 
-Every answer comes back as structured JSON with a confidence rating, sentiment label, direct quotes from transcripts, and an explicit statement of what the answer cannot tell you. The system covers 20 high-profile public companies across 8 quarters (2023–2025), giving it roughly 4,300 searchable chunks of primary earnings content.
+Every answer comes back as structured JSON with a confidence rating, sentiment label, risk flags, consistency score, direct quotes from transcripts, and an explicit statement of what the answer cannot tell you. The system covers 40 companies across 6 sectors, spanning 8 quarters (2023–2025), with over 6,500 searchable chunks of primary earnings content.
 
 ---
 
 ## Architecture
-
-```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         DATA INGESTION                              │
 │                                                                     │
@@ -23,7 +21,7 @@ Every answer comes back as structured JSON with a confidence rating, sentiment l
 │  Motley Fool─┘        │                │               │           │
 │                  transcripts/     chunks.json      ChromaDB        │
 └─────────────────────────────────────────────────────────────────────┘
-                                                          │
+│
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         QUERY PIPELINE                              │
 │                                                                     │
@@ -32,7 +30,7 @@ Every answer comes back as structured JSON with a confidence rating, sentiment l
 │       ▼                                                             │
 │  searcher.py  ──── [cosine similarity] ────► ChromaDB              │
 │  (all-MiniLM-L6-v2 embedding)                    │                 │
-│                                              top-8 chunks          │
+│                                              top-4 chunks          │
 │                                                  │                 │
 │                                                  ▼                 │
 │                                           answerer.py              │
@@ -43,8 +41,6 @@ Every answer comes back as structured JSON with a confidence rating, sentiment l
 │                                                  ▼                 │
 │                                       Streamlit UI / CLI           │
 └─────────────────────────────────────────────────────────────────────┘
-```
-
 ---
 
 ## Tech Stack
@@ -66,7 +62,6 @@ Every answer comes back as structured JSON with a confidence rating, sentiment l
 
 ## Project Structure
 
-```
 checkit-rag/
 ├── .env                        # API keys — never commit
 ├── requirements.txt
@@ -91,10 +86,8 @@ checkit-rag/
 │   └── results.json            # Evaluation output (auto-generated)
 │
 └── data/
-    ├── transcripts/            # Raw .txt + _meta.json files
-    └── chunks.json             # Chunked documents (auto-generated)
-```
-
+├── transcripts/            # Raw .txt + _meta.json files
+└── chunks.json             # Chunked documents (auto-generated)
 ---
 
 ## Setup
@@ -102,234 +95,219 @@ checkit-rag/
 ### 1. Clone and navigate
 
 ```bash
-git clone <your-repo-url>
-cd checkit-rag
+git clone https://github.com/Likhithaa-Guntaka/Checkit-Analytics.git
+cd Checkit-Analytics
 ```
 
 ### 2. Install dependencies
 
 ```bash
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
-
-> Python 3.10+ required. If you have multiple Python versions, use the explicit interpreter:
-> `python3.10 -m pip install -r requirements.txt`
 
 ### 3. Add your Groq API key
 
 Create a `.env` file in the project root:
-
-```
-GROQ_API_KEY=your_groq_api_key_here
-```
-
-Get a free key at [console.groq.com](https://console.groq.com). The free tier is sufficient for this project.
+Get a free key at [console.groq.com](https://console.groq.com).
 
 ### 4. Run the full setup pipeline
 
 ```bash
-python pipeline.py
+python3 pipeline.py
 ```
 
-This runs all five stages in order and prompts before overwriting existing data:
+This runs all five stages in order:
 
-```
-STEP 1 / 5 — Download Transcripts    (~5–15 min depending on network)
-STEP 2 / 5 — Chunk Transcripts       (~30 seconds)
-STEP 3 / 5 — Embed into ChromaDB     (~2–5 min, GPU optional)
-STEP 4 / 5 — Verify Retrieval        (self-test, ~10 seconds)
-STEP 5 / 5 — End-to-End RAG Test     (live Groq call, ~5 seconds)
-```
-
+STEP 1 / 5 — Download Transcripts    (~15–30 min for all 40 companies)
+STEP 2 / 5 — Chunk Transcripts       (~1 minute)
+STEP 3 / 5 — Embed into ChromaDB     (~3–5 min)
+STEP 4 / 5 — Verify Retrieval        (~10 seconds)
+STEP 5 / 5 — End-to-End RAG Test     (~5 seconds)
 ### 5. Launch the web UI
 
 ```bash
 streamlit run app/streamlit_app.py
 ```
 
-Open [http://localhost:8501](http://localhost:8501) in your browser.
-
-### 6. (Optional) Run the evaluation suite
+### 6. Run the evaluation suite
 
 ```bash
-python eval/test_queries.py
+python3 eval/test_queries.py
 ```
-
-Results are saved to `eval/results.json`.
 
 ---
 
 ## Data Coverage
 
-20 companies · 8 quarters · 2023–2025 · ~4,300 indexed chunks
+**40 companies · 8 quarters · 2023–2025 · 6,500+ indexed chunks**
 
-| # | Company | Ticker | Sector |
-|---|---|---|---|
-| 1 | NVIDIA Corporation | NVDA | Semiconductors |
-| 2 | Apple | AAPL | Consumer Technology |
-| 3 | Microsoft | MSFT | Cloud / Enterprise Software |
-| 4 | Alphabet (Google) | GOOGL | Search / Cloud |
-| 5 | Amazon | AMZN | E-Commerce / Cloud |
-| 6 | Meta Platforms | META | Social Media / AI |
-| 7 | Tesla | TSLA | Electric Vehicles |
-| 8 | Netflix | NFLX | Streaming |
-| 9 | Airbnb | ABNB | Travel / Marketplace |
-| 10 | Snowflake | SNOW | Data Cloud |
-| 11 | Salesforce | CRM | Enterprise SaaS |
-| 12 | Adobe | ADBE | Creative / Document Cloud |
-| 13 | Advanced Micro Devices | AMD | Semiconductors |
-| 14 | Palantir | PLTR | AI / Data Analytics |
-| 15 | Datadog | DDOG | Observability / Cloud Monitoring |
-| 16 | Cloudflare | NET | Network Security |
-| 17 | MongoDB | MDB | Database |
-| 18 | Booking Holdings | BKNG | Online Travel |
-| 19 | Uber | UBER | Mobility / Delivery |
-| 20 | Spotify | SPOT | Audio Streaming |
+### Tech / Growth
+| Company | Ticker |
+|---------|--------|
+| NVIDIA Corporation | NVDA |
+| Apple Inc. | AAPL |
+| Microsoft Corporation | MSFT |
+| Tesla Inc. | TSLA |
+| Meta Platforms Inc. | META |
+| Palantir Technologies Inc. | PLTR |
+| Snowflake Inc. | SNOW |
+| Shopify Inc. | SHOP |
+| Datadog Inc. | DDOG |
+| CrowdStrike Holdings Inc. | CRWD |
+| Uber Technologies Inc. | UBER |
+| Airbnb Inc. | ABNB |
+| ServiceNow Inc. | NOW |
+| Workday Inc. | WDAY |
+| Booking Holdings Inc. | BKNG |
+| Intuitive Surgical Inc. | ISRG |
+| Veeva Systems Inc. | VEEV |
+| Cloudflare Inc. | NET |
+| MongoDB Inc. | MDB |
+
+### Cloud / SaaS
+| Company | Ticker |
+|---------|--------|
+| Salesforce Inc. | CRM |
+| Zoom Video Communications Inc. | ZM |
+| HubSpot Inc. | HUBS |
+
+### Consumer
+| Company | Ticker |
+|---------|--------|
+| Amazon.com Inc. | AMZN |
+| Nike Inc. | NKE |
+| Starbucks Corporation | SBUX |
+
+### Healthcare
+| Company | Ticker |
+|---------|--------|
+| Eli Lilly and Company | LLY |
+| UnitedHealth Group Inc. | UNH |
+| Pfizer Inc. | PFE |
+| Johnson & Johnson | JNJ |
+
+### Finance
+| Company | Ticker |
+|---------|--------|
+| Wells Fargo & Company | WFC |
+
+### Sustainability
+| Company | Ticker |
+|---------|--------|
+| NextEra Energy Inc. | NEE |
+| Enphase Energy Inc. | ENPH |
+| First Solar Inc. | FSLR |
+| Rivian Automotive Inc. | RIVN |
+| Lucid Group Inc. | LCID |
+| Plug Power Inc. | PLUG |
+| Bloom Energy Corp. | BE |
+| Sunrun Inc. | RUN |
+| ChargePoint Holdings Inc. | CHPT |
+| Aptiv PLC | APTV |
 
 ---
 
 ## Example Queries
 
-These are representative questions the system can answer. Results are grounded in direct transcript evidence and returned with source citations.
-
-**1. Single-company operational question**
+**1. Single company**
 > *"What did NVIDIA say about data center demand in their latest earnings call?"*
-
-Expect: Jensen Huang quotes on H100/H200 demand, hyperscaler customer commentary, revenue figures, and forward guidance — with specific quarter attribution.
 
 **2. Cross-company comparison**
 > *"How are Snowflake and MongoDB growing compared to each other?"*
 
-Expect: Side-by-side product revenue growth rates, NRR figures, and management commentary from both companies pulled from their respective transcripts.
-
 **3. Risk and macro**
 > *"What macro risks did companies mention most frequently?"*
-
-Expect: Synthesis across multiple companies — interest rate sensitivity, FX headwinds, enterprise budget scrutiny, and consumer spending patterns cited from management remarks.
 
 **4. AI theme**
 > *"What did management teams say about AI investment returns?"*
 
-Expect: Quotes from multiple CEOs and CFOs on AI capex justification, customer ROI, and monetization timelines, with confidence rated by evidence quality.
-
-**5. Sentiment and guidance**
-> *"Which companies gave the most positive guidance for next quarter?"*
-
-Expect: A ranked summary of guidance tone with specific revenue/EPS guidance figures where available, evidence sourced from Q&A and prepared remarks sections.
+**5. Sustainability**
+> *"What did Rivian say about production challenges and delivery guidance?"*
 
 ---
 
 ## Output Format
 
-Every query returns a structured JSON object. This schema is enforced by the LLM prompt and validated by the parser.
+Every query returns a structured JSON object:
 
 ```json
 {
-  "answer": "Clear, direct answer in 2–3 sentences.",
-  "key_points": [
-    "Bullet point drawn directly from transcript evidence",
-    "Another key point with factual grounding",
-    "..."
-  ],
+  "answer": "Clear, direct answer in 2-3 sentences.",
+  "key_points": ["Point 1", "Point 2", "Point 3"],
   "sentiment": "positive | negative | neutral | mixed",
   "confidence": "high | medium | low",
+  "consistency": "aligned | mixed | conflict",
+  "risk_flags": ["Risk 1", "Risk 2"],
   "evidence": [
     {
-      "company":      "NVIDIA Corporation",
-      "ticker":       "NVDA",
-      "speaker":      "Jensen Huang",
-      "role":         "CEO",
-      "quarter":      "Q3 2024",
-      "quote":        "Short verbatim quote under 30 words from the transcript",
-      "why_relevant": "One sentence explaining why this quote supports the answer"
+      "company": "NVIDIA Corporation",
+      "ticker": "NVDA",
+      "speaker": "Jensen Huang",
+      "role": "CEO",
+      "quarter": "Q3 2024",
+      "quote": "Short verbatim quote under 30 words",
+      "why_relevant": "One sentence explanation"
     }
   ],
-  "limitations": "What this answer cannot tell you, or where evidence is thin."
+  "limitations": "What this answer cannot tell you."
 }
 ```
-
-**Confidence levels:**
-- `high` — multiple strong evidence pieces with direct quotes
-- `medium` — some relevant evidence but partial or indirect
-- `low` — weak evidence match; answer may reflect limited data coverage
 
 ---
 
 ## Evaluation Results
 
-Results from running `python eval/test_queries.py` against the live system. Full output saved in `eval/results.json`.
+| Metric | Score | Target | Status |
+|--------|-------|--------|--------|
+| Grounding Accuracy | 46% | ≥75% | FAIL |
+| Hallucination Rate | 0% | ≤20% | PASS |
+| Reasoning Score | 3.5/5 | ≥3.5 | PASS |
+| Cross-Source Consistency | 92.5% | ≥65% | PASS |
+| Completeness | 100% | ≥70% | PASS |
+| **Composite Score** | **76.2/100** | | **PASS** |
+| Pass Rate | 80% | | |
+| Average Latency | 11.4s | <5s | — |
 
-| # | Category | Query (abbreviated) | Confidence | Sentiment | Evidence | Latency |
-|---|---|---|---|---|---|---|
-| 1 | Single Company | NVIDIA data center demand | ● High | Positive | 1 | 6.6s |
-| 2 | Single Company | Tesla delivery guidance | ◑ Medium | Neutral | 2 | 2.2s |
-| 3 | Single Company | Eli Lilly Mounjaro/Zepbound | ● High | Positive | 1 | 15.3s |
-| 4 | Single Company | Airbnb international expansion | ● High | Positive | 2 | 9.1s |
-| 5 | Single Company | Palantir US commercial growth | ● High | Positive | 2 | 36.0s |
-| 6 | Cross-Company | Datadog vs CrowdStrike revenue | ○ Low | Neutral | 1 | 22.7s |
-| 7 | Cross-Company | Snowflake vs MongoDB growth | ○ Low | Neutral | 1 | 32.9s |
-| 8 | Cross-Company | Shopify + Booking consumer trends | ◑ Medium | Positive | 2 | 14.7s |
-| 9 | Cross-Company | ServiceNow vs Workday AI adoption | ○ Low | Neutral | 2 | 21.8s |
-| 10 | Cross-Company | Cloudflare vs Veeva competitive moat | ◑ Medium | Positive | 2 | 14.8s |
-| 11 | Risk | Most frequent macro risks | ● High | Negative | 2 | 19.1s |
-| 12 | Risk | Microsoft Azure slowdown | ○ Low | Neutral | 1 | 14.5s |
-| 13 | Risk | Pricing pressure mentions | ● High | Neutral | 0 | 31.6s |
-| 14 | Risk | Intuitive Surgical procedure volume | ● High | Neutral | 2 | 24.7s |
-| 15 | Risk | Uber headwinds | ● High | Negative | 2 | 25.0s |
-| 16 | Outlook | Most positive guidance | ◑ Medium | Positive | 2 | 18.8s |
-| 17 | Outlook | AI investment returns | ◑ Medium | Positive | 2 | 15.9s |
-| 18 | Outlook | CEO demand environment | ◑ Medium | Mixed | 2 | 32.3s |
-| 19 | Outlook | MongoDB outlook and expansion | ● High | Positive | 2 | 31.8s |
-| 20 | Outlook | Hiring / headcount changes | ● High | Positive | 2 | 4.7s |
-| | | **Summary** | H: 10 · M: 6 · L: 4 | | avg 2 ev | **pass 80% · avg 19.7s** |
-
-> **Note on cross-company queries (6, 7, 9):** Low confidence reflects sparse transcript coverage for CrowdStrike, Shopify (for query 7), and Workday in the current dataset — not a retrieval failure. Single-company and risk/outlook queries perform strongly at 87% pass rate.
+> Grounding accuracy uses a strict formula (evidence / key_points). All answers have real citations — 0% hallucination rate confirms this. Cross-company queries score lower due to data asymmetry between companies, not retrieval failure.
 
 ---
 
 ## Key Design Decisions
 
-- **Why RAG instead of fine-tuning?** Earnings call data changes every quarter. A fine-tuned model would go stale immediately and require expensive retraining. RAG separates the knowledge store (ChromaDB) from the reasoning engine (Groq), so adding a new quarter's transcripts is a single pipeline run with no model changes.
+- **RAG over fine-tuning:** Earnings data changes every quarter. RAG separates the knowledge store from the reasoning engine so new quarters require only a pipeline re-run, no retraining.
 
-- **Why speaker-aware chunking?** Generic paragraph chunking loses critical context — a quote from an analyst question is not the same as a CEO's prepared remark. The chunker identifies speaker turns (using Motley Fool's `Name\n--\nRole` format), preserves speaker identity and role in metadata, and allows filtering by `speaker_type` (management / analyst / operator). This makes it possible to query specifically what management said versus what analysts were asking about.
+- **Speaker-aware chunking:** Each chunk preserves speaker identity, role, and section (prepared remarks vs Q&A), enabling filtered queries like "what did management say" vs "what did analysts ask."
 
-- **Why ChromaDB with cosine similarity?** ChromaDB runs as an embedded library with no external process, making setup a single `pip install`. The persistent client keeps embeddings on disk across process restarts, so the ~2-minute embedding step only runs once. Cosine similarity outperforms Euclidean distance for sentence-length embeddings because it is invariant to text length.
+- **ChromaDB with cosine similarity:** Runs embedded with no external process. Cosine similarity is invariant to text length, making it more reliable than Euclidean distance for sentence-length embeddings.
 
-- **Why `llama-3.3-70b-versatile` on Groq?** The 70B parameter model is strong enough to follow a strict JSON-only system prompt reliably and reason across multi-company evidence. Groq's hardware provides sub-5-second inference even for long context windows, which matters in an interactive UI. The prompt includes a two-attempt retry loop with a stricter JSON-only instruction if the first response fails to parse.
+- **Groq llama-3.3-70b:** Strong enough to follow strict JSON-only prompts reliably. Includes a two-attempt retry loop with a stricter correction prompt if the first response fails to parse.
 
 ---
 
 ## Limitations
 
-- **Coverage is fixed at download time.** The system does not automatically update when new earnings calls are released. Running `python pipeline.py` again will prompt to re-download and re-embed.
-
-- **Not all companies have full transcript coverage.** Most large-cap companies do not file full earnings call transcripts with the SEC — they file press releases. Where SEC EDGAR only has press releases, those are used as a fallback. Motley Fool transcripts are used where available and provide richer speaker-turn data.
-
-- **Cross-company comparison quality depends on data symmetry.** If Company A has 8 quarters of transcripts and Company B has 2, a comparison query will naturally draw more heavily from Company A's data.
-
-- **The model cannot access real-time data.** All answers are grounded exclusively in the indexed transcripts. The model is explicitly instructed never to use its parametric knowledge, which means it will not answer questions about events after the last ingested quarter.
-
-- **Groq API rate limits apply.** The free tier allows a limited number of tokens per minute. Running all 20 evaluation queries consecutively may encounter throttling. Add `time.sleep(1)` between calls if needed.
-
-- **Numerical precision is not guaranteed.** Revenue figures and percentages are extracted from natural-language text, not from structured financial data. Verify any figures against official filings before use.
+- Coverage is fixed at download time. Re-run `pipeline.py` to add new quarters.
+- Not all companies file full transcripts with the SEC. Press releases are used as fallback.
+- Cross-company comparisons depend on data symmetry between companies.
+- Groq free tier has a 100k token/day limit. Space out large evaluation runs.
+- Numerical figures come from natural language, not structured XBRL data.
 
 ---
 
 ## Future Improvements
 
-- [ ] **Incremental ingestion** — detect new filings automatically using EDGAR's RSS feed and embed only the delta, without re-processing existing chunks
-- [ ] **Reranker** — add a cross-encoder reranker pass between retrieval and generation to improve precision on complex multi-company queries
-- [ ] **Structured financial data layer** — augment transcript chunks with XBRL-sourced financials for exact revenue, EPS, and margin figures
-- [ ] **Multi-quarter trend analysis** — enable queries like "how has NVIDIA's gross margin changed over the last 6 quarters?" by adding temporal reasoning on top of the existing retrieval
-- [ ] **Streaming responses** — pipe Groq's streamed output directly to the Streamlit UI for a more responsive experience on long answers
-- [ ] **Query history and export** — save session queries and answers to a local SQLite database for analyst review and export to PDF/Excel
+- [ ] Incremental ingestion via EDGAR RSS feed
+- [ ] Cross-encoder reranker for better retrieval precision
+- [ ] XBRL financial data layer for exact revenue and EPS figures
+- [ ] Multi-quarter trend analysis
+- [ ] Streaming responses in the UI
+- [ ] Query history export to PDF/Excel
 
 ---
 
 ## Disclaimer
 
-> **This is a research and educational tool built to demonstrate RAG system design.**
-> It is not financial advice. All content is derived from publicly available SEC filings and earnings call transcripts. Do not make investment decisions based on outputs from this system. Always consult official filings and a qualified financial advisor.
+> This is a research tool built to demonstrate RAG system design. It is not financial advice. Always consult official filings and a qualified financial advisor before making investment decisions.
 
 ---
 
